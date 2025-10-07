@@ -8,6 +8,21 @@ flake:
 with lib;
 let
   cfg = config.services.elephant;
+  # Available providers
+  providerOptions = {
+    desktopapplications = "Desktop application launcher";
+    files = "File search and management";
+    clipboard = "Clipboard history management";
+    runner = "Command runner";
+    symbols = "Symbols and emojis";
+    calc = "Calculator and unit conversion";
+    menus = "Custom menu system";
+    providerlist = "Provider listing and management";
+    websearch = "Web search integration";
+    todo = "Todo list";
+    unicode = "Unicode symbol search";
+    bluetooth = "Basic Bluetooth management";
+  };
 in
 {
   options.services.elephant = {
@@ -32,6 +47,27 @@ in
       description = "Group under which elephant runs.";
     };
 
+    providers = mkOption {
+      type = types.listOf (types.enum (attrNames providerOptions));
+      default = attrNames providerOptions;
+      example = [
+        "files"
+        "desktopapplications"
+        "calc"
+      ];
+
+      description = ''
+        List of providers to enable. Available providers:
+        ${concatStringsSep "\n" (mapAttrsToList (name: desc: "  - ${name}: ${desc}") providerOptions)}
+      '';
+    };
+
+    installService = mkOption {
+      type = types.bool;
+      default = true;
+      description = "Create a systemd service for elephant.";
+    };
+
     debug = mkOption {
       type = types.bool;
       default = false;
@@ -41,13 +77,19 @@ in
     config = mkOption {
       type = types.attrs;
       default = { };
+      example = literalExpression ''
+        {
+          providers = {
+            files = {
+              min_score = 50;
+            };
+            desktopapplications = {
+              launch_prefix = "uwsm app --";
+            };
+          };
+        }
+      '';
       description = "Elephant configuration as Nix attributes.";
-    };
-
-    installService = mkOption {
-      type = types.bool;
-      default = true;
-      description = "Create a systemd service for elephant.";
     };
   };
 
@@ -61,12 +103,22 @@ in
     };
 
     users.groups.${cfg.group} = { };
-
-    # Install providers system-wide
-    environment.etc."xdg/elephant/providers" = {
-      source = "${cfg.package}/lib/elephant/providers";
-    };
-
+    
+    # Install selected providers system-wide
+    system.activationScripts.elephantProviders = ''
+      mkdir -p /etc/xdg/elephant/providers
+      rm -f /etc/xdg/elephant/providers/*.so
+      # Copy enabled providers
+      ${concatStringsSep "\n" (
+        map (provider: ''
+          if [[ -f "${cfg.package}/lib/elephant/providers/${provider}.so" ]]; then
+            cp "${cfg.package}/lib/elephant/providers/${provider}.so" "/etc/xdg/elephant/providers/"
+            echo "Installed elephant provider: ${provider}"
+          fi
+        '') cfg.providers
+      )}
+    '';
+    
     # System-wide config
     environment.etc."xdg/elephant/elephant.toml" = mkIf (cfg.config != { }) {
       source = (pkgs.formats.toml { }).generate "elephant.toml" cfg.config;
