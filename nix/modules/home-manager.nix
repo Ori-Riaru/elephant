@@ -89,7 +89,7 @@ in {
           source = (pkgs.formats.toml {}).generate "elephant.toml" cfg.config;
         };
       }
-      // 
+      //
       # Generate provider files
       builtins.listToAttrs
       (map
@@ -117,6 +117,8 @@ in {
         ExecStart = "${cfg.package}/bin/elephant ${optionalString cfg.debug "--debug"}";
         Restart = "on-failure";
         RestartSec = 1;
+
+        Environment = "PATH=/run/wrappers/bin:/etc/profiles/per-user/%u/bin:/nix/var/nix/profiles/default/bin:/run/current-system/sw/bin:${config.home.profileDirectory}/bin";
 
         X-Restart-Triggers = [
           (builtins.hashString "sha256" (builtins.toJSON {
