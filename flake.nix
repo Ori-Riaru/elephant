@@ -87,6 +87,8 @@
           buildInputs = with pkgs; [
             wayland
             wayland-protocols 
+            wlroots
+            wlr-protocols
           ];
 
           nativeBuildInputs = with pkgs; [
