@@ -51,7 +51,7 @@ require (
 	github.com/knadh/koanf/parsers/toml/v2 v2.2.0
 	github.com/knadh/koanf/providers/file v1.2.0
 	github.com/knadh/koanf/providers/structs v1.0.0
-	github.com/knadh/koanf/v2 v2.2.2
+	github.com/knadh/koanf/v2 v2.3.0
 	github.com/neurlang/wayland v0.2.2
 	github.com/sho0pi/naturaltime v0.0.2
 	github.com/urfave/cli/v3 v3.4.1
