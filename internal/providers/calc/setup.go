@@ -26,7 +26,7 @@ import (
 
 var (
 	Name       = "calc"
-	NamePretty = "Calculator/Unit-Conversion"
+	NamePretty = "Random Change/Unit-Conversion"
 	config     *Config
 )
 
