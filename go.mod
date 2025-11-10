@@ -9,8 +9,8 @@ require (
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/mattn/go-sqlite3 v1.14.32
 	github.com/pelletier/go-toml/v2 v2.2.4
-	github.com/tinylib/msgp v1.4.0
-	google.golang.org/protobuf v1.36.8
+	github.com/tinylib/msgp v1.5.0
+	google.golang.org/protobuf v1.36.10
 )
 
 require (
@@ -27,7 +27,6 @@ require (
 	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
-	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/pprof v0.0.0-20230207041349-798e818bf904 // indirect
 	github.com/kevinburke/ssh_config v1.4.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
