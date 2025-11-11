@@ -23,7 +23,8 @@ jobs:
 
       - name: Update vendor hash
         run: |
-          nix run nixpkgs#nix-update -- --flake --version=skip elephant
+          nix run nixpkgs#nix-update -- --flake --version=skip elephant 
+          nix run nixpkgs#nix-update -- --flake --version=skip elephant-providers
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v6
