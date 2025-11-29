@@ -275,98 +275,89 @@ func Query(conn net.Conn, query string, single bool, exact bool, _ uint8) []*pb.
 		entries = append(entries, addressEntry)
 	}
 
+
+	// Search with engine
+	
+	// Assign available actions based on config
+	searchActions := []string{}
+	if config.EnginesAsActions {
+		for _, engine := range config.Engines {
+			searchActions = append(searchActions, engine.Name)
+		}
+	} else {
+		searchActions = append(searchActions, "search")
+	}
+
 	// Search with engine
 	if single {
-		if config.EnginesAsActions {
-			a := []string{}
-
-			for _, v := range config.Engines {
-				a = append(a, v.Name)
+		for k, engine := range config.Engines {
+			icon := engine.Icon
+			if icon == "" {
+				icon = config.Icon
 			}
 
-			e := &pb.QueryResponse_Item{
-				Identifier: "websearch",
-				Text:       fmt.Sprintf("%s%s", config.TextPrefix, query),
-				Actions:    a,
-				Icon:       Icon(),
+			entry := &pb.QueryResponse_Item{
+				Identifier: strconv.Itoa(k),
+				Text:       engine.Name,
+				Subtext:    "",
+				Actions:    searchActions,
+				Icon:       icon,
 				Provider:   Name,
-				Score:      1,
+				Score:      int32(100 - k),
 				Type:       0,
 			}
 
-			entries = append(entries, e)
-		} else {
-			if single {
-				for k, v := range config.Engines {
-					icon := v.Icon
-					if icon == "" {
-						icon = config.Icon
-					}
+			if query != "" {
+				score, pos, start := common.FuzzyScore(query, engine.Name, exact)
 
-					e := &pb.QueryResponse_Item{
-						Identifier: strconv.Itoa(k),
-						Text:       v.Name,
-						Subtext:    "",
-						Actions:    []string{"search"},
-						Icon:       icon,
-						Provider:   Name,
-						Score:      int32(100 - k),
-						Type:       0,
-					}
-
-					if query != "" {
-						score, pos, start := common.FuzzyScore(query, v.Name, exact)
-
-						e.Score = score
-						e.Fuzzyinfo = &pb.QueryResponse_Item_FuzzyInfo{
-							Field:     "text",
-							Positions: pos,
-							Start:     start,
-						}
-					}
-
-					var usageScore int32
-					if config.History {
-						if e.Score > config.MinScore || query == "" && config.HistoryWhenEmpty {
-							usageScore = h.CalcUsageScore(query, e.Identifier)
-
-							if usageScore != 0 {
-								e.State = append(e.State, "history")
-								e.Actions = append(e.Actions, history.ActionDelete)
-							}
-
-							e.Score = e.Score + usageScore
-						}
-					}
-
-					if e.Score > config.MinScore || query == "" {
-						entries = append(entries, e)
-					}
+				entry.Score = score
+				entry.Fuzzyinfo = &pb.QueryResponse_Item_FuzzyInfo{
+					Field:     "text",
+					Positions: pos,
+					Start:     start,
 				}
 			}
 
-			if len(entries) == 0 || !single {
-				for k, v := range config.Engines {
-					if v.Default || (prefix != "" && v.Prefix == prefix) {
-						icon := v.Icon
-						if icon == "" {
-							icon = config.Icon
-						}
+			var usageScore int32
+			if config.History {
+				if entry.Score > config.MinScore || query == "" && config.HistoryWhenEmpty {
+					usageScore = h.CalcUsageScore(query, entry.Identifier)
 
-						e := &pb.QueryResponse_Item{
-							Identifier: strconv.Itoa(k),
-							Text:       v.Name,
-							Subtext:    "",
-							Actions:    []string{"search"},
-							Icon:       icon,
-							Provider:   Name,
-							Score:      int32(15 - k),
-							Type:       0,
-						}
-
-						entries = append(entries, e)
+					if usageScore != 0 {
+						entry.State = append(entry.State, "history")
+						entry.Actions = append(entry.Actions, history.ActionDelete)
 					}
+
+					entry.Score = entry.Score + usageScore
 				}
+			}
+
+			if entry.Score > config.MinScore || query == "" {
+				entries = append(entries, entry)
+			}
+		}
+	}
+
+	if len(entries) == 0 || !single {
+		for k, engine := range config.Engines {
+			if engine.Default || (prefix != "" && engine.Prefix == prefix) {
+				icon := engine.Icon
+				if icon == "" {
+					icon = config.Icon
+				}
+
+				e := &pb.QueryResponse_Item{
+					Identifier: strconv.Itoa(k),
+					Text:       engine.Name,
+					Subtext:    "",
+					Actions:    searchActions,
+					Icon:       icon,
+					Provider:   Name,
+					Score:      int32(15 - k),
+					Type:       0,
+				}
+
+				entries = append(entries, e)
 			}
 		}
 	}
