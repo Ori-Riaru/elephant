@@ -273,8 +273,10 @@ func Query(conn net.Conn, query string, single bool, exact bool, _ uint8) []*pb.
 		}
 
 		entries = append(entries, addressEntry)
-		}
-	} else {
+	}
+
+	// Search with engine
+	if single {
 		if config.EnginesAsActions {
 			a := []string{}
 
