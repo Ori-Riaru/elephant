@@ -25,9 +25,9 @@ const (
 func Activate(single bool, identifier, action string, query string, args string, format uint8, conn net.Conn) {
 	switch action {
 	case ActionOpenURL:
-		address := query
+		address := identifier
 		if !strings.Contains(address, "://") {
-			address = fmt.Sprintf("https://%s", query)
+			address = fmt.Sprintf("https://%s", identifier)
 		}
 
 		openURL(address)
