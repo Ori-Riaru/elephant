@@ -30,6 +30,9 @@ var (
 	currentSuggestions      = []Suggestion{}
 	currentSuggestionsMutex = &sync.RWMutex{}
 	pendingCancel           context.CancelFunc
+	currentBrowserHistory   = []*pb.QueryResponse_Item{}
+	browserHistoryMutex     = &sync.RWMutex{}
+	browserHistoryCancel    context.CancelFunc
 	engineNameMap           = make(map[string]*Engine)
 	engineIdentifierMap     = make(map[string]*Engine)
 	httpClient              = &http.Client{
