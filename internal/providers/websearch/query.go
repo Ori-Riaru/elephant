@@ -577,13 +577,12 @@ func getBrowserSuggestions(query string, engines []Engine, filterByHost bool) []
 		sqlQuery = fmt.Sprintf(`
 			SELECT
 				h.url,
-				h.title,
-				h.frecency
+				h.title
 			FROM moz_places h
 			WHERE %s
 			AND (%s)
-			AND h.hidden = 0
 			AND h.title IS NOT NULL
+			AND h.hidden = 0
 			ORDER BY h.frecency DESC
 			LIMIT ?
 		`, whereClause, hostClause)
@@ -591,12 +590,11 @@ func getBrowserSuggestions(query string, engines []Engine, filterByHost bool) []
 		sqlQuery = fmt.Sprintf(`
 			SELECT 
 				h.url,
-				h.title,
-				h.frecency
+				h.title
 			FROM moz_places h
 			WHERE %s
-			AND h.hidden = 0
 			AND h.title IS NOT NULL
+			AND h.hidden = 0
 			ORDER BY h.frecency DESC
 			LIMIT ?
 		`, whereClause)
@@ -617,8 +615,7 @@ func getBrowserSuggestions(query string, engines []Engine, filterByHost bool) []
 	i := 0
 	for rows.Next() {
 		var url, title string
-		var frecency int
-		err := rows.Scan(&url, &title, &frecency)
+		err := rows.Scan(&url, &title)
 		if err != nil {
 			slog.Warn(Name, "browser_history", "scan failed", "error", err)
 			continue
