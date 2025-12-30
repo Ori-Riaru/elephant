@@ -24,6 +24,48 @@ func generateSlotIdentifier(slot int) string {
 	return fmt.Sprintf("websearch-slot-%d", slot)
 }
 
+func createBrowserHistoryPlaceholders(queriedEngines []Engine, prefix string, query string) []*pb.QueryResponse_Item {
+	entries := []*pb.QueryResponse_Item{}
+
+	if !config.BrowserHistoryEnabled {
+		return entries
+	}
+
+	if query == "" {
+		return entries
+	}
+
+	if prefix == config.EngineFinderPrefix {
+		return entries
+	}
+
+	browserHistoryMutex.RLock()
+
+	if len(currentBrowserHistory) == 0 {
+		browserHistoryMutex.RUnlock()
+		return entries
+	}
+
+	for slot := 0; slot < len(currentBrowserHistory); slot++ {
+		h := currentBrowserHistory[slot]
+		placeholderItem := &pb.QueryResponse_Item{
+			Identifier: h.Identifier,
+			Text:       h.Text,
+			Subtext:    h.Subtext,
+			Icon:       h.Icon,
+			Provider:   Name,
+			Score:      h.Score,
+			Type:       0,
+			State:      []string{"placeholder"},
+			Actions:    h.Actions,
+		}
+		entries = append(entries, placeholderItem)
+	}
+
+	browserHistoryMutex.RUnlock()
+	return entries
+}
+
 func createPlaceholderSlots(queriedEngines []Engine, prefix string, query string) []*pb.QueryResponse_Item {
 	entries := []*pb.QueryResponse_Item{}
 
@@ -128,6 +170,90 @@ func scheduleSuggestionsAsync(queriedEngines []Engine, prefix string, query stri
 			fetchAndSendSuggestions(ctx, queriedEngines, prefix, query, conn, format)
 		}
 	})
+}
+
+func scheduleBrowserHistoryAsync(query string, engines []Engine, filterByHost bool, conn net.Conn, format uint8) {
+	if query == "" {
+		return
+	}
+
+	// Cancel previous pending query
+	if browserHistoryCancel != nil {
+		browserHistoryCancel()
+	}
+
+	// Create context for this query
+	ctx, cancel := context.WithCancel(context.Background())
+	browserHistoryCancel = cancel
+
+	// Create debounce timer
+	time.AfterFunc(time.Duration(config.SuggestionsDebounce)*time.Millisecond, func() {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			fetchAndSendBrowserHistory(ctx, query, engines, filterByHost, conn, format)
+		}
+	})
+}
+
+func fetchAndSendBrowserHistory(ctx context.Context, query string, engines []Engine, filterByHost bool, conn net.Conn, format uint8) {
+	select {
+	case <-ctx.Done():
+		return
+	default:
+	}
+
+	entries := getBrowserSuggestions(query, engines, filterByHost)
+
+	select {
+	case <-ctx.Done():
+		return
+	default:
+	}
+
+	browserHistoryMutex.Lock()
+
+	oldEntries := currentBrowserHistory
+	currentBrowserHistory = entries
+
+	if len(entries) == 0 {
+		for slot := 0; slot < len(oldEntries); slot++ {
+			deleteItem := &pb.QueryResponse_Item{
+				Identifier: oldEntries[slot].Identifier,
+				Text:       "%DELETE%",
+			}
+			handlers.UpdateItem(format, query, conn, deleteItem)
+		}
+		browserHistoryMutex.Unlock()
+		return
+	}
+
+	for i, item := range entries {
+		updatedItem := &pb.QueryResponse_Item{
+			Identifier: item.Identifier,
+			Text:       item.Text,
+			Subtext:    item.Subtext,
+			Actions:    item.Actions,
+			Icon:       item.Icon,
+			Provider:   Name,
+			Score:      int32(config.BrowserHistoryLimit - i),
+			Type:       0,
+		}
+		handlers.UpdateItem(format, query, conn, updatedItem)
+	}
+
+	for i := len(entries); i < len(oldEntries); i++ {
+		deleteItem := &pb.QueryResponse_Item{
+			Identifier: oldEntries[i].Identifier,
+			Text:       "%DELETE%",
+		}
+		handlers.UpdateItem(format, query, conn, deleteItem)
+	}
+
+	browserHistoryMutex.Unlock()
+
+	browserHistoryCancel = nil
 }
 
 func fetchAndSendSuggestions(ctx context.Context, queriedEngines []Engine, prefix string, query string, conn net.Conn, format uint8) {
@@ -406,10 +532,14 @@ func queryEngines(prefix string, query string, single bool, exact bool, conn net
 		scheduleSuggestionsAsync(queriedEngines, prefix, query, conn, format)
 	}
 
-	// Add local browser history based suggestions
-	if (single || prefix != "") && config.BrowserHistoryEnabled {
+	// Schedule async browser history suggestions
+	if (single || prefix != "") && config.BrowserHistoryEnabled && query != "" && prefix != config.EngineFinderPrefix {
 		filterByHost := prefix != "" && prefix != config.EngineFinderPrefix
-		entries = append(entries, getBrowserSuggestions(query, queriedEngines, filterByHost)...)
+
+		historySlots := createBrowserHistoryPlaceholders(queriedEngines, prefix, query)
+		entries = append(entries, historySlots...)
+
+		scheduleBrowserHistoryAsync(query, queriedEngines, filterByHost, conn, format)
 	}
 
 	// Engines finder
