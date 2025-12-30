@@ -381,7 +381,7 @@ func queryEngines(prefix string, query string, single bool, exact bool, conn net
 
 		// Force search above finder when single
 		score := int32(len(queriedEngines) - i)
-		if single && engine.DefaultSingle {
+		if single && engine.DefaultSingle || prefix != "" {
 			score += 1_000
 		}
 
@@ -406,7 +406,11 @@ func queryEngines(prefix string, query string, single bool, exact bool, conn net
 		scheduleSuggestionsAsync(queriedEngines, prefix, query, conn, format)
 	}
 
-	// TODO: Add local browser history based suggestions
+	// Add local browser history based suggestions
+	if (single || prefix != "") && config.BrowserHistoryEnabled {
+		filterByHost := prefix != "" && prefix != config.EngineFinderPrefix
+		entries = append(entries, getBrowserSuggestions(query, queriedEngines, filterByHost)...)
+	}
 
 	// Engines finder
 	isPrefix := prefix == config.EngineFinderPrefix && prefix != ""
@@ -512,4 +516,136 @@ func fetchApiSuggestions(address string, query string, jsonPath string) ([]strin
 	}
 
 	return suggestions, nil
+}
+
+func getBrowserSuggestions(query string, engines []Engine, filterByHost bool) []*pb.QueryResponse_Item {
+	entries := []*pb.QueryResponse_Item{}
+
+	if browserHistoryDB == nil {
+		slog.Debug(Name, "browser_history", "db is nil")
+		return entries
+	}
+
+	if len(engines) == 0 {
+		return entries
+	}
+
+	tokens := strings.Fields(strings.ToLower(query))
+	if len(tokens) == 0 {
+		return entries
+	}
+
+	var conditions []string
+	var args []interface{}
+
+	for _, token := range tokens {
+		conditions = append(conditions, "(LOWER(h.title) LIKE ? OR LOWER(h.url) LIKE ?)")
+		pattern := "%" + token + "%"
+		args = append(args, pattern, pattern)
+	}
+	whereClause := strings.Join(conditions, " AND ")
+
+	var sqlQuery string
+
+	if filterByHost {
+		var hostPatterns []string
+		for _, engine := range engines {
+			u, err := url.Parse(engine.URL)
+			if err != nil {
+				continue
+			}
+			if u.Host == "" {
+				continue
+			}
+
+			host := strings.ToLower(u.Host)
+			revHost := reverseHost(host) + "."
+			hostPatterns = append(hostPatterns, revHost)
+		}
+
+		if len(hostPatterns) == 0 {
+			return entries
+		}
+
+		hostConditions := make([]string, len(hostPatterns))
+		for i, host := range hostPatterns {
+			hostConditions[i] = "LOWER(h.rev_host) LIKE ?"
+			args = append(args, host+"%")
+		}
+		hostClause := strings.Join(hostConditions, " OR ")
+
+		sqlQuery = fmt.Sprintf(`
+			SELECT
+				h.url,
+				h.title,
+				h.frecency
+			FROM moz_places h
+			WHERE %s
+			AND (%s)
+			AND h.hidden = 0
+			AND h.title IS NOT NULL
+			ORDER BY h.frecency DESC
+			LIMIT ?
+		`, whereClause, hostClause)
+	} else {
+		sqlQuery = fmt.Sprintf(`
+			SELECT 
+				h.url,
+				h.title,
+				h.frecency
+			FROM moz_places h
+			WHERE %s
+			AND h.hidden = 0
+			AND h.title IS NOT NULL
+			ORDER BY h.frecency DESC
+			LIMIT ?
+		`, whereClause)
+	}
+
+	args = append(args, config.BrowserHistoryLimit)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	rows, err := browserHistoryDB.QueryContext(ctx, sqlQuery, args...)
+	if err != nil {
+		slog.Warn(Name, "browser_history", "query failed", "query", query, "error", err)
+		return entries
+	}
+	defer rows.Close()
+
+	i := 0
+	for rows.Next() {
+		var url, title string
+		var frecency int
+		err := rows.Scan(&url, &title, &frecency)
+		if err != nil {
+			slog.Warn(Name, "browser_history", "scan failed", "error", err)
+			continue
+		}
+
+		entries = append(entries, &pb.QueryResponse_Item{
+			Identifier: url,
+			Text:       title,
+			Subtext:    url,
+			Actions:    []string{ActionOpenURL},
+			Icon:       Icon(),
+			Provider:   Name,
+			Score:      int32(config.BrowserHistoryLimit - i),
+			Type:       0,
+		})
+		i += 1
+	}
+
+	slog.Debug(Name, "browser_history", "results", "count", len(entries), "query", query)
+
+	return entries
+}
+
+func reverseHost(host string) string {
+	runes := []rune(host)
+	for i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {
+		runes[i], runes[j] = runes[j], runes[i]
+	}
+	return string(runes)
 }

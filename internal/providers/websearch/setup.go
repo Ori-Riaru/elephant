@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/md5"
+	"database/sql"
 	_ "embed"
 	"encoding/hex"
 	"fmt"
@@ -11,11 +12,14 @@ import (
 	"sync"
 	"time"
 
+	"log/slog"
+
 	"github.com/abenz1267/elephant/v2/internal/comm/handlers"
 	"github.com/abenz1267/elephant/v2/internal/util"
 	"github.com/abenz1267/elephant/v2/pkg/common"
 	"github.com/abenz1267/elephant/v2/pkg/common/history"
 	"github.com/abenz1267/elephant/v2/pkg/pb/pb"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 var (
@@ -35,6 +39,7 @@ var (
 			IdleConnTimeout:     30 * time.Second,
 		},
 	}
+	browserHistoryDB *sql.DB
 )
 
 //go:embed README.md
@@ -55,6 +60,9 @@ type Config struct {
 	MaxApiItems               int      `koanf:"max_api_items" desc:"maximum final number of api suggestion items" default:"4"`
 	SuggestionsTimeout        int      `koanf:"suggestions_timeout" desc:"timeout at which a suggestion query will be dropped" default:"1000"`
 	SuggestionsDebounce       int      `koanf:"suggestions_debounce" desc:"debounce delay for async suggestions (ms)" default:"100"`
+	BrowserHistoryEnabled     bool     `koanf:"browser_history_enabled" desc:"enable local browser history suggestions" default:"true"`
+	BrowserHistoryPath        string   `koanf:"browser_history_path" desc:"path to browser places.sqlite" default:""`
+	BrowserHistoryLimit       int      `koanf:"browser_history_limit" desc:"max browser history suggestions to return" default:"8"`
 }
 
 type Engine struct {
@@ -90,9 +98,12 @@ func Setup() {
 		TextPrefix:                "Search: ",
 		Command:                   "xdg-open",
 		AlwaysShowDefault:         true,
-		MaxApiItems:               4,
+		MaxApiItems:               3,
 		SuggestionsTimeout:        1000,
 		SuggestionsDebounce:       100,
+		BrowserHistoryEnabled:     true,
+		BrowserHistoryPath:        "/home/riaru/.mozilla/firefox/riaru",
+		BrowserHistoryLimit:       6,
 	}
 
 	common.LoadConfig(Name, config)
@@ -137,6 +148,31 @@ func Setup() {
 
 		if v.Default {
 			handlers.MaxGlobalItemsToDisplayWebsearch++
+		}
+	}
+
+	if config.BrowserHistoryEnabled && config.BrowserHistoryPath != "" {
+		path := config.BrowserHistoryPath
+		if !strings.HasSuffix(path, "places.sqlite") {
+			path += "/places.sqlite"
+		}
+
+		var err error
+		browserHistoryDB, err = sql.Open("sqlite3", path+"?mode=ro&_timeout=5000")
+		if err != nil {
+			slog.Warn(Name, "browser_history", "failed to open database", "path", path, "error", err)
+			browserHistoryDB = nil
+		} else {
+			browserHistoryDB.SetMaxOpenConns(1)
+			browserHistoryDB.SetMaxIdleConns(1)
+
+			if err = browserHistoryDB.Ping(); err != nil {
+				slog.Warn(Name, "browser_history", "failed to ping database", "error", err)
+				browserHistoryDB.Close()
+				browserHistoryDB = nil
+			} else {
+				slog.Info(Name, "browser_history", "database opened successfully")
+			}
 		}
 	}
 }
