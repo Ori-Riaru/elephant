@@ -31,6 +31,11 @@
             gcc
             protobuf
             protoc-gen-go
+            air
+            wl-clipboard
+            libqalculate
+            imagemagick
+            bluez
           ];
         };
       });
@@ -45,7 +50,7 @@
 
           src = ./.;
 
-          vendorHash = "sha256-tO+5x2FIY1UBvWl9x3ZSpHwTWUlw1VNDTi9+2uY7xdU=";
+          vendorHash = "sha256-W3W0HMrV4TohZ/G9MwKI/P988q1tuJew+KHHhSmKFso=";
 
           buildInputs = with pkgs; [
             protobuf
@@ -82,7 +87,7 @@
 
           src = ./.;
 
-          vendorHash = "sha256-tO+5x2FIY1UBvWl9x3ZSpHwTWUlw1VNDTi9+2uY7xdU=";
+          vendorHash = "sha256-W3W0HMrV4TohZ/G9MwKI/P988q1tuJew+KHHhSmKFso=";
 
           buildInputs = with pkgs; [
             wayland

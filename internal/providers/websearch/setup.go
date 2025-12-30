@@ -62,7 +62,7 @@ type Config struct {
 	SuggestionsDebounce       int      `koanf:"suggestions_debounce" desc:"debounce delay for async suggestions (ms)" default:"100"`
 	BrowserHistoryEnabled     bool     `koanf:"browser_history_enabled" desc:"enable local browser history suggestions" default:"true"`
 	BrowserHistoryPath        string   `koanf:"browser_history_path" desc:"path to browser places.sqlite" default:""`
-	BrowserHistoryLimit       int      `koanf:"browser_history_limit" desc:"max browser history suggestions to return" default:"8"`
+	BrowserHistoryLimit       int      `koanf:"browser_history_limit" desc:"max browser history suggestions to return" default:"6"`
 }
 
 type Engine struct {
