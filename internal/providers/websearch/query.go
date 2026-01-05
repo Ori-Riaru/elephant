@@ -209,9 +209,11 @@ func getBrowserSuggestions(query string, engines []Engine, filterByHost bool) []
 	defer rows.Close()
 
 	i := 0
+	fmt.Println("HERE")
 	for rows.Next() {
 		var url, title string
 		err := rows.Scan(&url, &title)
+		fmt.Println(title, url)
 		if err != nil {
 			slog.Warn(Name, "browser_history", "scan failed", "error", err)
 			continue
@@ -392,7 +394,7 @@ func fetchApiSuggestions(address string, query string, jsonPath string) ([]strin
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:133.0) Gecko/20100101 Firefox/133.0")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:146.0) Gecko/20100101 Firefox/146.0")
 
 	res, err := httpClient.Do(req)
 	if err != nil {
@@ -424,10 +426,9 @@ func fetchApiSuggestions(address string, query string, jsonPath string) ([]strin
 }
 
 func fetchAndSendSuggestions(ctx context.Context, queriedEngines []Engine, _ /* prefix */ string, query string, conn net.Conn, format uint8) {
-	// Check if context was cancelled (new query started)
 	select {
 	case <-ctx.Done():
-		return // Query was cancelled, don't send updates
+		return
 	default:
 	}
 
@@ -449,8 +450,7 @@ func fetchAndSendSuggestions(ctx context.Context, queriedEngines []Engine, _ /* 
 				engine.SuggestionsPath,
 			)
 			if err != nil {
-				slog.Warn( // TODO Look in to this
-					"fetchSuggestions failed",
+				slog.Warn("fetchSuggestions failed",
 					"name", Name,
 					slog.Any("error", err),
 				)
@@ -474,14 +474,13 @@ func fetchAndSendSuggestions(ctx context.Context, queriedEngines []Engine, _ /* 
 	}
 	wg.Wait()
 
-	// Check if context was cancelled again after fetching
 	select {
 	case <-ctx.Done():
-		return // Query was cancelled, don't send updates
+		return
 	default:
 	}
 
-	// Deduplicate and sort
+	// Deduplicate
 	sort.Slice(allSuggestions, func(i, j int) bool {
 		return allSuggestions[i].Score > allSuggestions[j].Score
 	})
@@ -491,7 +490,7 @@ func fetchAndSendSuggestions(ctx context.Context, queriedEngines []Engine, _ /* 
 
 	currentSuggestionsMutex.Lock()
 
-	// Build new suggestions list (limited to MaxApiItems)
+	// Build new suggestions list
 	newSuggestions := []Suggestion{}
 	suggestionIndex := 0
 	for suggestionIndex < len(allSuggestions) && len(newSuggestions) < config.MaxApiItems {
@@ -556,26 +555,23 @@ func fetchAndSendSuggestions(ctx context.Context, queriedEngines []Engine, _ /* 
 	pendingCancel = nil
 }
 
-// TODO: remove unused
-func listEngines(query string, _ bool, exact bool) []*pb.QueryResponse_Item {
-
+func listEngines(query string, exact bool) []*pb.QueryResponse_Item {
 	entries := []*pb.QueryResponse_Item{}
 
 	for k, v := range config.Engines {
-		text := v.Name
-		if v.Prefix != "" {
-			text = fmt.Sprintf("%s ( %s )", v.Name, v.Prefix)
-		}
-
 		e := &pb.QueryResponse_Item{
 			Identifier: v.Identifier,
-			Text:       text,
+			Text:       v.Name,
 			Subtext:    "",
 			Actions:    []string{"search"},
 			Icon:       v.Icon,
 			Provider:   Name,
 			Score:      int32(len(config.Engines) - k),
 			Type:       0,
+		}
+
+		if v.Prefix != "" {
+			e.Text = fmt.Sprintf("%s ( %s )", v.Name, v.Prefix)
 		}
 
 		if query != "" {
@@ -589,10 +585,9 @@ func listEngines(query string, _ bool, exact bool) []*pb.QueryResponse_Item {
 			}
 		}
 
-		var usageScore int32
 		if config.History {
 			if e.Score > config.MinScore || query == "" && config.HistoryWhenEmpty {
-				usageScore = h.CalcUsageScore(query, e.Identifier)
+				usageScore := h.CalcUsageScore(query, e.Identifier)
 
 				if usageScore != 0 {
 					e.State = append(e.State, "history")
@@ -652,7 +647,6 @@ func queryEngines(prefix string, query string, single bool, exact bool, conn net
 
 	// Direct search
 	for i, engine := range queriedEngines {
-
 		searchEntry := &pb.QueryResponse_Item{
 			Identifier: engine.Identifier,
 			Text:       engine.Name,
@@ -694,21 +688,13 @@ func queryEngines(prefix string, query string, single bool, exact bool, conn net
 		scheduleBrowserHistoryAsync(query, queriedEngines, filterByHost, conn, format)
 	}
 
-	// Engines finder
-	isPrefix := prefix == config.EngineFinderPrefix && prefix != ""
-	isDefault := prefix == "" && !single && config.EngineFinderDefault
-	isDefaultSingle := prefix == "" && single && config.EngineFinderDefaultSingle
-	if isPrefix || isDefault || isDefaultSingle {
-		entries = append(entries, listEngines(query, single, exact)...)
-	}
-
 	return entries
 }
 
 func queryEmpty(single bool, exact bool) []*pb.QueryResponse_Item {
 	entries := []*pb.QueryResponse_Item{}
 
-	entries = append(entries, listEngines("", single, exact)...)
+	entries = append(entries, listEngines("", exact)...)
 
 	// TODO Add configurable empty behavior
 	// TODO List Recent Browser History
@@ -762,8 +748,18 @@ func Query(conn net.Conn, query string, single bool, exact bool, format uint8) [
 			entries = append(entries, queryEmpty(single, exact)...)
 		} else {
 			entries = append(entries, queryEngines(prefix, query, single, exact, conn, format)...)
+
+			// Engine finder
+			isPrefix := prefix == config.EngineFinderPrefix && prefix != ""
+			isDefault := prefix == "" && !single && config.EngineFinderDefault
+			isDefaultSingle := prefix == "" && single && config.EngineFinderDefaultSingle
+			if isPrefix || isDefault || isDefaultSingle {
+				entries = append(entries, listEngines(query, exact)...)
+			}
 		}
 	}
+
+
 
 	// Boost results when queried with prefix
 	if prefix != "" {
