@@ -25,12 +25,12 @@ const (
 func Activate(single bool, identifier, action string, query string, args string, format uint8, conn net.Conn) {
 	switch action {
 	case ActionOpenURL:
-		address := identifier
-		if !strings.Contains(address, "://") {
-			address = fmt.Sprintf("https://%s", identifier)
+		url := identifier
+		if !strings.Contains(url, "://") {
+			url = fmt.Sprintf("https://%s", identifier)
 		}
 
-		openURL(address)
+		openURL(url)
 
 	case ActionSearch:
 		engine := engineIdentifierMap[identifier]
@@ -41,11 +41,10 @@ func Activate(single bool, identifier, action string, query string, args string,
 
 		_, args = splitEnginePrefix(args)
 
-		address := expandSubstitutions(engine.URL, args)
-		run(query, identifier, address)
+		url := expandSubstitutions(engine.URL, args)
+		run(query, identifier, url)
 
 	case ActionSearchSuggestion:
-		// Parse slot number from identifier (format: "websearch-slot-{slot_number}")
 		slotStr := strings.TrimPrefix(identifier, "websearch-slot-")
 		slot, err := strconv.Atoi(slotStr)
 		if err != nil {
@@ -54,21 +53,11 @@ func Activate(single bool, identifier, action string, query string, args string,
 		}
 
 		currentSuggestionsMutex.RLock()
-		if slot < 0 || slot >= len(currentSuggestions) {
-			currentSuggestionsMutex.RUnlock()
-			slog.Error(Name, "activate", "suggestion slot out of range", "id", identifier)
-			return
-		}
-		s := currentSuggestions[slot]
+		suggestion := currentSuggestions[slot]
 		currentSuggestionsMutex.RUnlock()
 
-		if s.Content == "" {
-			slog.Error(Name, "activate", "empty suggestion at slot", "slot", slot)
-			return
-		}
-
-		url := expandSubstitutions(s.Engine.URL, s.Content)
-		run(query, s.Engine.Identifier, url)
+		url := expandSubstitutions(suggestion.Engine.URL, suggestion.Content)
+		run(query, suggestion.Engine.Identifier, url)
 
 	case history.ActionDelete:
 		h.Remove(identifier)
@@ -79,14 +68,14 @@ func Activate(single bool, identifier, action string, query string, args string,
 			return
 		}
 
-		if args == "" {
-			args = query
-		}
-
 		engine := engineNameMap[action]
 		if engine == nil {
 			slog.Error(Name, "activate", "unknown engine", "action", action)
 			return
+		}
+
+		if args == "" {
+			args = query
 		}
 
 		q := engine.URL

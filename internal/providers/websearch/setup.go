@@ -33,7 +33,7 @@ type Config struct {
 	common.Config      `koanf:",squash"`
 	Command            string   `koanf:"command" desc:"default command to be executed. supports %VALUE%." default:"xdg-open"`
 	Engines            []Engine `koanf:"entries" desc:"entries" default:"google"`
-	BrowserProfilePath string   `koanf:"browser_history_path" desc:"path to browser profile" default:""`
+	BrowserProfilePath string   `koanf:"browser_profile_path" desc:"path to browser profile" default:""`
 	TextPrefix         string   `koanf:"text_prefix" desc:"text prefix for search entries" default:"Search: "`
 	AlwaysShowDefault  bool     `koanf:"always_show_default" desc:"show default search engine when multiple providers are queried" default:"false"`
 	EnginesAsActions   bool     `koanf:"engines_as_actions" desc:"run engines as actions" default:"true"`
@@ -102,8 +102,9 @@ func Setup() {
 			config.Engines[k].Icon = config.Config.Icon
 		}
 
+		// Assume open search format by default
 		if v.SuggestionsPath == "" {
-			config.Engines[k].SuggestionsPath = "1" // Assume open search format by default
+			config.Engines[k].SuggestionsPath = "1"
 		}
 
 		if v.Prefix != "" {
