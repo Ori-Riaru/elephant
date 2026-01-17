@@ -50,7 +50,7 @@
 
           src = ./.;
 
-          vendorHash = "sha256-W3W0HMrV4TohZ/G9MwKI/P988q1tuJew+KHHhSmKFso=";
+          vendorHash = "sha256-+WnMSQoU+NNIs+8uC5hs7yPaNaBFb/d3+faSDstHsMA=";
 
           buildInputs = with pkgs; [
             protobuf
@@ -87,7 +87,7 @@
 
           src = ./.;
 
-          vendorHash = "sha256-W3W0HMrV4TohZ/G9MwKI/P988q1tuJew+KHHhSmKFso=";
+          vendorHash = "sha256-+WnMSQoU+NNIs+8uC5hs7yPaNaBFb/d3+faSDstHsMA=";
 
           buildInputs = with pkgs; [
             wayland
@@ -206,6 +206,7 @@
                         libqalculate
                         imagemagick
                         bluez
+                        rbw
                       ]
                     )
                   }
