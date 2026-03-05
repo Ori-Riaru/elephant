@@ -209,7 +209,6 @@ func getBrowserSuggestions(query string, engines []Engine, filterByHost bool) []
 	defer rows.Close()
 
 	i := 0
-	fmt.Println("HERE")
 	for rows.Next() {
 		var url, title string
 		err := rows.Scan(&url, &title)

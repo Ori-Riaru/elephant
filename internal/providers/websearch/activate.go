@@ -109,7 +109,7 @@ func run(query, identifier, url string) {
 }
 
 func openURL(url string) {
-	cmdStr := fmt.Sprintf("%s %s %s", common.LaunchPrefix(""), config.Command, shellescape.Quote(url))
+	cmdStr := fmt.Sprintf("%s %s %s", common.LaunchPrefix(), config.Command, shellescape.Quote(url))
 	cmd := exec.Command("sh", "-c", strings.TrimSpace(cmdStr))
 
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}

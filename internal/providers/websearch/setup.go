@@ -7,6 +7,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"net"
+	"net/url"
 	"strings"
 
 	"github.com/abenz1267/elephant/v2/internal/comm/handlers"
@@ -173,6 +175,15 @@ func LoadConfig() {
 		TextPrefix:        "Search: ",
 		Command:           "xdg-open",
 		AlwaysShowDefault: true,
+
+		EngineFinderPrefix:        "@e",
+		EngineFinderDefault:       false,
+		EngineFinderDefaultSingle: true,
+
+		SuggestionsDebounce: 100,
+		SuggestionsTimeout:  1000,
+		MaxApiItems:         4,
+		MaxBrowserItems:     6,
 	}
 
 	common.LoadConfig(Name, config)
